@@ -3,6 +3,8 @@ package com.azesmwayreactnativeunity;
 import static com.azesmwayreactnativeunity.ReactNativeUnity.*;
 
 import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 
 import androidx.annotation.NonNull;
@@ -26,6 +28,7 @@ import java.util.Map;
 
 @ReactModule(name = ReactNativeUnityViewManager.NAME)
 public class ReactNativeUnityViewManager extends ReactNativeUnityViewManagerSpec<ReactNativeUnityView> implements LifecycleEventListener, View.OnAttachStateChangeListener {
+  private static final String TAG = "RNUnityViewManager";
   ReactApplicationContext context;
   static ReactNativeUnityView view;
   public static final String NAME = "RNUnityView";
@@ -51,7 +54,9 @@ public class ReactNativeUnityViewManager extends ReactNativeUnityViewManagerSpec
     if (getPlayer() != null) {
         try {
             view.setUnityPlayer(getPlayer());
-        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {}
+        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+            Log.e(TAG, "Failed to set existing Unity player on view", e);
+        }
     } else {
         try {
             createPlayer(context.getCurrentActivity(), new UnityPlayerCallback() {
@@ -76,7 +81,9 @@ public class ReactNativeUnityViewManager extends ReactNativeUnityViewManagerSpec
                 reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(view.getId(), "onPlayerQuit", data);
               }
             });
-        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {}
+        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+            Log.e(TAG, "Failed to create Unity player", e);
+        }
     }
 
     return view;
@@ -140,7 +147,11 @@ public class ReactNativeUnityViewManager extends ReactNativeUnityViewManagerSpec
   public void pauseUnity(ReactNativeUnityView view, boolean pause) {
     if (isUnityReady()) {
       assert getPlayer() != null;
-      getPlayer().pause();
+      if (pause) {
+        getPlayer().pause();
+      } else {
+        getPlayer().resume();
+      }
     }
   }
 
@@ -201,7 +212,7 @@ public class ReactNativeUnityViewManager extends ReactNativeUnityViewManagerSpec
   private void restoreUnityUserState() {
     // restore the unity player state
     if (isUnityPaused()) {
-      Handler handler = new Handler();
+      Handler handler = new Handler(Looper.getMainLooper());
       handler.postDelayed(new Runnable() {
         @Override
         public void run() {

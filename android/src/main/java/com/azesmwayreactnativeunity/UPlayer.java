@@ -2,6 +2,7 @@ package com.azesmwayreactnativeunity;
 
 import android.app.Activity;
 import android.content.res.Configuration;
+import android.util.Log;
 import android.widget.FrameLayout;
 
 import com.unity3d.player.*;
@@ -11,6 +12,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 public class UPlayer {
+    private static final String TAG = "UPlayer";
     private static UnityPlayer unityPlayer;
 
     public UPlayer(final Activity activity, final ReactNativeUnity.UnityPlayerCallback callback) throws ClassNotFoundException, InvocationTargetException, IllegalAccessException, InstantiationException {
@@ -91,7 +93,7 @@ public class UPlayer {
         }
     }
 
-    public FrameLayout requestFrame() throws NoSuchMethodException {
+    public FrameLayout requestFrame() {
         try {
             Method getFrameLayout = unityPlayer.getClass().getMethod("getFrameLayout");
 
@@ -101,17 +103,21 @@ public class UPlayer {
             if (FrameLayout.class.isInstance(unityPlayer)) {
                 return FrameLayout.class.cast(unityPlayer);
             } else {
+                Log.w(TAG, "UnityPlayer is not a FrameLayout and has no getFrameLayout() — requestFrame() returning null");
                 return null;
             }
         }
     }
 
-    public void setZ(float v) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+    public void setZ(float v) {
         try {
-            Method setZ = unityPlayer.getClass().getMethod("setZ");
-
-            setZ.invoke(unityPlayer, v);
-        } catch (NoSuchMethodException e) {}
+            FrameLayout frame = this.requestFrame();
+            if (frame != null) {
+                frame.setZ(v);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to set Z on Unity player", e);
+        }
     }
 
     public Object getContextPlayer() {

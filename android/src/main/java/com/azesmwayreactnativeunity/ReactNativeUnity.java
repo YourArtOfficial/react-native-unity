@@ -3,6 +3,9 @@ package com.azesmwayreactnativeunity;
 import android.app.Activity;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 
@@ -11,6 +14,8 @@ import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import java.lang.reflect.InvocationTargetException;
 
 public class ReactNativeUnity {
+    private static final String TAG = "ReactNativeUnity";
+
     private static UPlayer unityPlayer;
     public static boolean _isUnityReady;
     public static boolean _isUnityPaused;
@@ -51,36 +56,51 @@ public class ReactNativeUnity {
 
                     try {
                         unityPlayer = new UPlayer(activity, callback);
-                    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | InvocationTargetException e) {}
-
-                    try {
-                        // wait a moment. fix unity cannot start when startup.
-                        Thread.sleep(1000);
-                    } catch (Exception e) {}
-
-                    // start unity
-                    try {
-                        addUnityViewToBackground();
-                    } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {}
-
-                    unityPlayer.windowFocusChanged(true);
-
-                    try {
-                        unityPlayer.requestFocusPlayer();
-                    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {}
-
-                    unityPlayer.resume();
-
-                    if (!fullScreen) {
-                        activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
-                        activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                        Log.e(TAG, "Failed to create Unity player", e);
                     }
 
-                    _isUnityReady = true;
+                    if (unityPlayer == null) {
+                        Log.e(TAG, "Unity player was not created — aborting initialization");
+                        return;
+                    }
 
-                    try {
-                        callback.onReady();
-                    } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {}
+                    // Defer post-init work to avoid blocking the UI thread.
+                    // The old Thread.sleep(1000) caused ANR risk and rendering issues.
+                    final boolean wasFullScreen = fullScreen;
+                    new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                addUnityViewToBackground();
+                            } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
+                                Log.e(TAG, "Failed to add Unity view to background", e);
+                            }
+
+                            unityPlayer.windowFocusChanged(true);
+
+                            try {
+                                unityPlayer.requestFocusPlayer();
+                            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+                                Log.w(TAG, "Failed to request focus on Unity player", e);
+                            }
+
+                            unityPlayer.resume();
+
+                            if (!wasFullScreen) {
+                                activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+                                activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                            }
+
+                            _isUnityReady = true;
+
+                            try {
+                                callback.onReady();
+                            } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
+                                Log.e(TAG, "Callback onReady failed", e);
+                            }
+                        }
+                    }, 1000);
                 }
             });
         }
@@ -112,6 +132,12 @@ public class ReactNativeUnity {
             return;
         }
 
+        android.widget.FrameLayout frame = unityPlayer.requestFrame();
+        if (frame == null) {
+            Log.w(TAG, "requestFrame() returned null — cannot add Unity view to background");
+            return;
+        }
+
         if (unityPlayer.getParentPlayer() != null) {
             // NOTE: If we're being detached as part of the transition, make sure
             // to explicitly finish the transition first, as it might still keep
@@ -119,8 +145,8 @@ public class ReactNativeUnity {
             // prevents a crash on an `addContentView()` later on.
             // Otherwise, if there's no transition, it's a no-op.
             // See https://stackoverflow.com/a/58247331
-            ((ViewGroup) unityPlayer.getParentPlayer()).endViewTransition(unityPlayer.requestFrame());
-            ((ViewGroup) unityPlayer.getParentPlayer()).removeView(unityPlayer.requestFrame());
+            ((ViewGroup) unityPlayer.getParentPlayer()).endViewTransition(frame);
+            ((ViewGroup) unityPlayer.getParentPlayer()).removeView(frame);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -129,7 +155,7 @@ public class ReactNativeUnity {
 
         final Activity activity = ((Activity) unityPlayer.getContextPlayer());
         ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(1, 1);
-        activity.addContentView(unityPlayer.requestFrame(), layoutParams);
+        activity.addContentView(frame, layoutParams);
     }
 
     public static void addUnityViewToGroup(ViewGroup group) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
@@ -137,12 +163,18 @@ public class ReactNativeUnity {
             return;
         }
 
+        android.widget.FrameLayout frame = unityPlayer.requestFrame();
+        if (frame == null) {
+            Log.w(TAG, "requestFrame() returned null — cannot add Unity view to group");
+            return;
+        }
+
         if (unityPlayer.getParentPlayer() != null) {
-            ((ViewGroup) unityPlayer.getParentPlayer()).removeView(unityPlayer.requestFrame());
+            ((ViewGroup) unityPlayer.getParentPlayer()).removeView(frame);
         }
 
         ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT);
-        group.addView(unityPlayer.requestFrame(), 0, layoutParams);
+        group.addView(frame, 0, layoutParams);
         unityPlayer.windowFocusChanged(true);
         unityPlayer.requestFocusPlayer();
         unityPlayer.resume();

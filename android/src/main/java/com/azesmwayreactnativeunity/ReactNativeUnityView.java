@@ -6,12 +6,14 @@ import android.content.Context;
 
 import android.annotation.SuppressLint;
 import android.content.res.Configuration;
+import android.util.Log;
 import android.widget.FrameLayout;
 
 import java.lang.reflect.InvocationTargetException;
 
 @SuppressLint("ViewConstructor")
 public class ReactNativeUnityView extends FrameLayout {
+  private static final String TAG = "ReactNativeUnityView";
   private UPlayer view;
   public boolean keepPlayerMounted = false;
 
@@ -62,7 +64,7 @@ public class ReactNativeUnityView extends FrameLayout {
         try {
             addUnityViewToBackground();
         } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
-            throw new RuntimeException(e);
+            Log.e(TAG, "Failed to move Unity view to background on detach", e);
         }
     }
 
