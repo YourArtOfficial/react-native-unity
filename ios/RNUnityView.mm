@@ -61,6 +61,14 @@ static RNUnityView *sharedInstance;
         array[count] = NULL;
 
         [[self ufw] runEmbeddedWithArgc: gArgc argv: array appLaunchOpts: appLaunchOpts];
+
+        // Free the strdup'd strings and the malloc'd array
+        for (unsigned i = 0; i < count; i++)
+        {
+            free(array[i]);
+        }
+        free(array);
+
         [[self ufw] appController].quitHandler = ^(){ NSLog(@"AppController.quitHandler called"); };
         [self.ufw.appController.rootView removeFromSuperview];
 
@@ -90,7 +98,7 @@ static RNUnityView *sharedInstance;
    }
 }
 
-- (void)pauseUnity:(BOOL * _Nonnull)pause {
+- (void)pauseUnity:(BOOL)pause {
     if([self unityIsInitialized]) {
         [[self ufw] pause:pause];
     }
@@ -102,6 +110,7 @@ static RNUnityView *sharedInstance;
         [main makeKeyAndVisible];
 
         if([self unityIsInitialized]) {
+            [NSClassFromString(@"FrameworkLibAPI") unregisterAPIforNativeCalls];
             [[self ufw] unloadApplication];
         }
     }
@@ -123,7 +132,7 @@ static RNUnityView *sharedInstance;
         [self setUfw: nil];
 
         if (self.onPlayerUnload) {
-            self.onPlayerUnload(nil);
+            self.onPlayerUnload(@{@"message": @"unloaded"});
         }
     }
 }
@@ -134,7 +143,7 @@ static RNUnityView *sharedInstance;
         [self setUfw: nil];
 
         if (self.onPlayerQuit) {
-            self.onPlayerQuit(nil);
+            self.onPlayerQuit(@{@"message": @"quit"});
         }
     }
 }
@@ -157,15 +166,11 @@ static RNUnityView *sharedInstance;
 - (void)prepareForRecycle {
     [super prepareForRecycle];
 
-    if ([self unityIsInitialized]) {
-      [[self ufw] unloadApplication];
-
-      NSArray *viewsToRemove = self.subviews;
-      for (UIView *v in viewsToRemove) {
-          [v removeFromSuperview];
-      }
-
-      [self setUfw:nil];
+    // Only detach the Unity view from this component — do NOT unload the
+    // singleton Unity runtime, as that would break it for any future views.
+    NSArray *viewsToRemove = self.subviews;
+    for (UIView *v in viewsToRemove) {
+        [v removeFromSuperview];
     }
 }
 
@@ -178,13 +183,37 @@ static RNUnityView *sharedInstance;
     static const auto defaultProps = std::make_shared<const RNUnityViewProps>();
     _props = defaultProps;
 
-    self.onUnityMessage = [self](NSDictionary* data) {
-      if (_eventEmitter != nil) {
-        auto gridViewEventEmitter = std::static_pointer_cast<RNUnityViewEventEmitter const>(_eventEmitter);
+    __weak RNUnityView *weakSelf = self;
+    self.onUnityMessage = ^(NSDictionary* data) {
+      RNUnityView *strongSelf = weakSelf;
+      if (strongSelf && strongSelf->_eventEmitter != nil) {
+        auto gridViewEventEmitter = std::static_pointer_cast<RNUnityViewEventEmitter const>(strongSelf->_eventEmitter);
         facebook::react::RNUnityViewEventEmitter::OnUnityMessage event = {
           .message=[[data valueForKey:@"message"] UTF8String]
         };
         gridViewEventEmitter->onUnityMessage(event);
+      }
+    };
+
+    self.onPlayerUnload = ^(NSDictionary* data) {
+      RNUnityView *strongSelf = weakSelf;
+      if (strongSelf && strongSelf->_eventEmitter != nil) {
+        auto eventEmitter = std::static_pointer_cast<RNUnityViewEventEmitter const>(strongSelf->_eventEmitter);
+        facebook::react::RNUnityViewEventEmitter::OnPlayerUnload event = {
+          .message=[[data valueForKey:@"message"] UTF8String]
+        };
+        eventEmitter->onPlayerUnload(event);
+      }
+    };
+
+    self.onPlayerQuit = ^(NSDictionary* data) {
+      RNUnityView *strongSelf = weakSelf;
+      if (strongSelf && strongSelf->_eventEmitter != nil) {
+        auto eventEmitter = std::static_pointer_cast<RNUnityViewEventEmitter const>(strongSelf->_eventEmitter);
+        facebook::react::RNUnityViewEventEmitter::OnPlayerQuit event = {
+          .message=[[data valueForKey:@"message"] UTF8String]
+        };
+        eventEmitter->onPlayerQuit(event);
       }
     };
   }

@@ -11,5 +11,6 @@ __attribute__ ((visibility("default")))
 @interface FrameworkLibAPI : NSObject
 
 +(void) registerAPIforNativeCalls:(id<NativeCallsProtocol>) aApi;
++(void) unregisterAPIforNativeCalls;
 
 @end

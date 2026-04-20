@@ -9,12 +9,19 @@ id<NativeCallsProtocol> api = NULL;
     api = aApi;
 }
 
++(void) unregisterAPIforNativeCalls
+{
+    api = NULL;
+}
+
 @end
 
 extern "C"
 {
     void sendMessageToMobileApp(const char* message)
     {
-        return [api sendMessageToMobileApp:[NSString stringWithUTF8String:message]];
+        if (api != NULL) {
+            [api sendMessageToMobileApp:[NSString stringWithUTF8String:message]];
+        }
     }
 }

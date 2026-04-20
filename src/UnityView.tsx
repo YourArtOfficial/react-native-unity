@@ -66,7 +66,7 @@ export default class UnityView extends React.Component<RNUnityViewProps> {
   }
 
   componentWillUnmount() {
-    if (this.ref.current) {
+    if (this.ref.current && !this.props.androidKeepPlayerMounted) {
       Commands.unloadUnity(this.ref.current);
     }
   }
